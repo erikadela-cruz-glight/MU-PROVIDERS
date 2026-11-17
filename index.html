@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MU Providers and Locations</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #1c2b30;
+    --muted: #6b7c83;
+    --line: #e3e9ec;
+    --accent: #0b6e7f;
+    --accent-ink: #ffffff;
+    --focus: #1a73e8;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121c20;
+      --ink: #e4eef1;
+      --muted: #8fa3ab;
+      --line: #263840;
+      --accent: #4fc0d3;
+      --accent-ink: #072a31;
+      --focus: #8ab4f8;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.45;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { margin: 0 0 20px; font-size: 24px; font-weight: 700; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; }
+  .controls input, .controls select {
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+  }
+  .controls input { flex: 1 1 240px; min-width: 180px; }
+
+  .bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin: 18px 0 6px; color: var(--muted); font-size: 14px;
+  }
+  .bar .actions { display: flex; gap: 14px; align-items: center; }
+  .btn {
+    border: 0; background: var(--accent); color: var(--accent-ink);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600;
+  }
+  .link {
+    border: 0; background: none; padding: 0; cursor: pointer;
+    color: var(--accent); text-decoration: underline; text-underline-offset: 3px;
+  }
+
+  .row {
+    display: grid; grid-template-columns: 1.2fr 1.1fr 2fr auto; gap: 16px; align-items: baseline;
+    padding: 12px 0; border-top: 1px solid var(--line);
+  }
+  .name { font-weight: 600; }
+  .role, .locs { color: var(--muted); }
+  .copy {
+    border: 0; background: none; cursor: pointer; color: var(--muted); padding: 2px 6px;
+    opacity: 0;
+  }
+  .row:hover .copy, .copy:focus-visible { opacity: 1; }
+  .copy:hover { color: var(--accent); }
+  @media (hover: none) { .copy { opacity: 1; } }
+
+  .empty { padding: 32px 0; color: var(--muted); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px;
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+  @media (max-width: 680px) {
+    .row { grid-template-columns: 1fr auto; gap: 2px 12px; }
+    .role, .locs { grid-column: 1 / -1; }
+    .copy { grid-row: 1; grid-column: 2; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MU Providers and Locations</h1>
+
+  <div class="controls">
+    <input id="q" type="search" placeholder="Search" aria-label="Search providers">
+    <select id="role" aria-label="Role">
+      <option value="">All roles</option>
+      <option>Urologist</option>
+      <option>Advanced Practice Provider</option>
+      <option>Pathologist</option>
+    </select>
+    <select id="loc" aria-label="Location"></select>
+  </div>
+
+  <div class="bar">
+    <span id="count" aria-live="polite"></span>
+    <span class="actions">
+      <button class="link" id="copyTable" type="button">Copy for Excel</button>
+      <button class="btn" id="copyList" type="button">Copy list</button>
+    </span>
+  </div>
+
+  <main id="list"></main>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const DATA = [
+  ["Joseph Akornor","Urologist",["Coon Rapids","Plymouth (Suite 530)"]],
+  ["Vanessa Amanor","Advanced Practice Provider",["Coon Rapids","Fridley","Plymouth (Suite 530)"]],
+  ["Emma Bacharach","Urologist",["Buffalo","Edina"]],
+  ["Tyler Back","Advanced Practice Provider",["Brooklyn Park"]],
+  ["Sida Bai","Advanced Practice Provider",["Edina"]],
+  ["Lee Baumgarten","Urologist",["Coon Rapids","Fridley","Plymouth (Suite 530)"]],
+  ["Andrew Bergersen","Urologist",["Brooklyn Park","Robbinsdale","Waconia"]],
+  ["Thomas Bergman","Advanced Practice Provider",["Eagan","Woodbury"]],
+  ["Matthew Braasch","Urologist",["Edina","Shakopee"]],
+  ["Todd Brandt","Urologist",["Hudson","Woodbury"]],
+  ["Roy Brown, Jr.","Urologist",["Brooklyn Park","Robbinsdale"]],
+  ["Kelsey Carlson","Advanced Practice Provider",["Eagan","Woodbury"]],
+  ["Joseph Cerny, Jr.","Urologist",["Brooklyn Park","Robbinsdale"]],
+  ["Brent Cleveland","Urologist",["Faribault","Maplewood","Woodbury"]],
+  ["Kayla Cummings","Advanced Practice Provider",["Robbinsdale","Waconia"]],
+  ["Michael Ehlert","Urologist",["Coon Rapids","Faribault","Fridley","Maplewood"]],
+  ["Nicholas Elliott","Urologist",["Maplewood","Woodbury"]],
+  ["Paul Fadden","Urologist",["Edina"]],
+  ["Mark Fallen","Urologist",["Buffalo"]],
+  ["Amanda Fortier","Advanced Practice Provider",["Coon Rapids","Fridley","Plymouth (Suite 530)"]],
+  ["Halle Foss","Urologist",["Eagan","Maplewood","Woodbury"]],
+  ["Jill Freeman","Advanced Practice Provider",["Coon Rapids"]],
+  ["Derek Gearman","Urologist",["Edina","Shakopee"]],
+  ["Andrea Gerber","Advanced Practice Provider",["Woodbury"]],
+  ["Gregory Hanson","Urologist",["Coon Rapids","Fridley","Plymouth (Suite 530)"]],
+  ["Spencer Hart","Urologist",["Eagan","Woodbury"]],
+  ["Jared Johnson","Urologist",["Eagan","Maplewood","Woodbury"]],
+  ["Michael Jenson","Advanced Practice Provider",["Woodbury"]],
+  ["Rachel Johnson","Advanced Practice Provider",["Eagan","Maplewood","Woodbury"]],
+  ["Sam Jolley","Advanced Practice Provider",["Woodbury"]],
+  ["Mekha Karot","Advanced Practice Provider",["Eagan","Woodbury"]],
+  ["J. Karl Kemberling","Urologist",["Brooklyn Park","Robbinsdale"]],
+  ["Tessa-Kay Koch","Advanced Practice Provider",[],"See additional notes below"],
+  ["Melinda Lampert","Advanced Practice Provider",["Coon Rapids","Fridley"]],
+  ["Nina Lebrun","Advanced Practice Provider",["Woodbury"]],
+  ["Joseph Thomas Mahon","Urologist",["Edina"]],
+  ["Jodi Michaels","Urologist",["Fridley","Plymouth (Suite 530)","Woodbury"]],
+  ["Aaron Milbank","Urologist",["Eagan","Edina","Maplewood","Plymouth (Suite 530)","Woodbury"]],
+  ["Danly Omil-Lima","Urologist",["Edina"]],
+  ["Stephen Overholser","Urologist",["Edina"]],
+  ["Matthew O\u2019Shaughnessy","Urologist",["Edina"]],
+  ["Randolph K. Peterson","Pathologist",["Laboratory Testing (System-wide)"]],
+  ["Michael Pintauro","Urologist",["Eagan","Maplewood","Woodbury"]],
+  ["Anthony Polcari","Urologist",["Maplewood","Woodbury"]],
+  ["David Prall","Urologist",["Hudson","Woodbury"]],
+  ["Kathleen Puttmann","Urologist",["Hudson","Maplewood","Woodbury"]],
+  ["Leone Ritz","Pathologist",["Laboratory Testing (System-wide)"]],
+  ["Katie Schmitz","Advanced Practice Provider",["Eagan","Woodbury"]],
+  ["Michael Shapiro","Urologist",["Maplewood","Woodbury"]],
+  ["Brian Sherman","Advanced Practice Provider",["Maplewood","Woodbury"]],
+  ["Lioudmila Sitnikova","Urologist",["Edina"]],
+  ["Neil Skemp","Urologist",["Robbinsdale","Waconia"]],
+  ["Chase Sovell","Urologist",["Edina"]],
+  ["Jill Stanway","Advanced Practice Provider",["Woodbury"]],
+  ["Monica Stassi-Fritz","Advanced Practice Provider",["Eagan","Woodbury"]],
+  ["David Streitz","Urologist",["Fridley"]],
+  ["Beatrice Stoneburner","Advanced Practice Provider",["Coon Rapids","Fridley","Plymouth (Suite 530)"]],
+  ["Basir Tareen","Urologist",["Faribault","Maplewood","Woodbury"]],
+  ["Mary Tellier","Advanced Practice Provider",["Maplewood","Woodbury"]],
+  ["Jessica Thonack","Advanced Practice Provider",["Robbinsdale"]],
+  ["Dean Tortorelis","Urologist",["Brooklyn Park","Edina","Robbinsdale"]],
+  ["Kevin Unger","Urologist",["Cambridge"]],
+  ["Nikil Uppaluri","Urologist",["Coon Rapids","Fridley","Plymouth (Suite 530)"]],
+  ["Joseph Zanghi","Urologist",["Brooklyn Park","Robbinsdale","Waconia"]]
+].map(([name, role, locs, note]) => ({ name, role, locs, note: note || "" }));
+
+const state = { q: "", role: "", loc: "" };
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+const ALL_LOCS = [...new Set(DATA.flatMap(d => d.locs))].sort((a, b) => a.localeCompare(b));
+$("loc").innerHTML = `<option value="">All locations</option>` +
+  ALL_LOCS.map(l => `<option>${esc(l)}</option>`).join("");
+
+const locText = d => d.locs.length ? d.locs.join(", ") : d.note;
+const lineOf = d => `${d.name} | ${d.role} | ${locText(d)}`;
+
+function filtered() {
+  const words = state.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return DATA.filter(d => {
+    if (state.role && d.role !== state.role) return false;
+    if (state.loc && !d.locs.includes(state.loc)) return false;
+    const hay = [d.name, d.role, d.note, ...d.locs].join(" ").toLowerCase();
+    return words.every(w => hay.includes(w));
+  });
+}
+
+function render() {
+  const rows = filtered();
+  $("count").textContent = `${rows.length} provider${rows.length === 1 ? "" : "s"}`;
+  $("list").innerHTML = rows.length ? rows.map(d => `
+    <div class="row">
+      <span class="name">${esc(d.name)}</span>
+      <span class="role">${esc(d.role)}</span>
+      <span class="locs">${esc(locText(d))}</span>
+      <button type="button" class="copy" data-copy="${esc(lineOf(d))}" aria-label="Copy ${esc(d.name)}">Copy</button>
+    </div>`).join("") : `<div class="empty">No matches. Try a different search or filter.</div>`;
+}
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast.id);
+  toast.id = setTimeout(() => t.classList.remove("show"), 1600);
+}
+async function copyText(text, msg) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (_) {}
+    ta.remove();
+  }
+  toast(msg || "Copied");
+}
+
+$("q").addEventListener("input", e => { state.q = e.target.value; render(); });
+$("role").addEventListener("change", e => { state.role = e.target.value; render(); });
+$("loc").addEventListener("change", e => { state.loc = e.target.value; render(); });
+$("copyList").onclick = () => {
+  const rows = filtered();
+  if (rows.length) copyText(rows.map(lineOf).join("\n"), `Copied ${rows.length}`);
+};
+$("copyTable").onclick = () => {
+  const rows = filtered();
+  if (rows.length) copyText(["Name\tRole\tLocations", ...rows.map(d => `${d.name}\t${d.role}\t${locText(d)}`)].join("\n"), `Copied ${rows.length} for Excel`);
+};
+$("list").addEventListener("click", e => {
+  const c = e.target.closest("[data-copy]");
+  if (c) copyText(c.dataset.copy);
+});
+
+render();
+</script>
+</body>
+</html>
